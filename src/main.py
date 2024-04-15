@@ -1,5 +1,6 @@
 import gym
 import numpy as np
+import matplotlib.pyplot as plt
 
 # Definition einer einfachen Umgebung für das autonome Fahrzeug
 class SimpleDrivingEnv(gym.Env):
@@ -110,13 +111,47 @@ def evaluate_agent(env, q_table=None, episodes=100, use_random=False):
 
     return metrics
 
-# Initialisierung der Umgebung und Training des Agenten
+# Visualisierung der Agentenbewegung
+def visualize_agent_path(env, q_table, use_random, episode):
+    state = env.reset()
+    done = False
+    states = [state]
+    while not done:
+        if use_random:
+            action = env.action_space.sample()
+        else:
+            x, y = state
+            action = np.argmax(q_table[x, y])
+        state, _, done, _ = env.step(action)
+        states.append(state)
+
+    xs, ys = zip(*states)
+    plt.plot(ys, xs, 'o-', label='Path')
+    plt.plot(ys[0], xs[0], 'go', markersize=10, label='Start')  # Start
+    plt.plot(ys[-1], xs[-1], 'ro', markersize=10, label='Goal')  # Ziel
+    plt.grid()
+    plt.legend()
+    plt.title('Agent Path' + (' with ' if not use_random else ' without ') + 'Decision Algorithm')
+    plt.show()
+
+# Hauptausführung
 env = SimpleDrivingEnv()
 q_table = train_q_learning(env)
 
-# Bewertung des Agenten mit und ohne Entscheidungsalgorithmen
+# Bewertung des Agenten ohne Entscheidungsalgorithmen
 metrics_without_algo = evaluate_agent(env, use_random=True)
-metrics_with_algo = evaluate_agent(env, q_table)
-
 print("Leistung ohne Entscheidungsalgorithmen:", metrics_without_algo)
+
+# Bewertung des Agenten mit Entscheidungsalgorithmen
+metrics_with_algo = evaluate_agent(env, q_table)
 print("Leistung mit Entscheidungsalgorithmen:", metrics_with_algo)
+
+# Visualisierung ohne Entscheidungsalgorithmen
+print("Visualisierung ohne Entscheidungsalgorithmen:")
+visualize_agent_path(env, q_table, use_random=True, episode=0)
+
+# Visualisierung mit Entscheidungsalgorithmen
+print("Visualisierung mit Entscheidungsalgorithmen:")
+visualize_agent_path(env, q_table, use_random=False, episode=0)
+
+env.close()
