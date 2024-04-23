@@ -1,9 +1,9 @@
-import time
 import gym
 import numpy as np
 import matplotlib.pyplot as plt
+import csv
+import pandas as pd
 
-# Definition einer einfachen Umgebung für das autonome Fahrzeug
 class SimpleDrivingEnv(gym.Env):
     def __init__(self):
         super(SimpleDrivingEnv, self).__init__()
@@ -30,7 +30,8 @@ class SimpleDrivingEnv(gym.Env):
         collision = self.state in self.obstacles
         reward = 10 if done else -10 if collision else -1
         
-        return self.state, reward, done or collision, {}
+        sensor_value = self.get_sensor_value()  # Hier wird der Sensorwert abgerufen
+        return self.state, reward, done or collision, sensor_value
 
     def render(self, mode='human'):
         grid = np.zeros((6, 6), dtype=int)
@@ -38,7 +39,13 @@ class SimpleDrivingEnv(gym.Env):
         for obs in self.obstacles:
             grid[obs] = -1 
         grid[self.state] = 1
-        print(grid)
+        plt.imshow(grid, cmap='viridis', interpolation='nearest')
+        plt.title("Simple Driving Environment")
+        plt.show()
+    
+    def get_sensor_value(self):
+        # Dummy-Sensorwert, der eine zufällige Zahl zwischen 0 und 100 zurückgibt
+        return np.random.randint(0, 101)
 
 # Training des Agenten mit Q-Learning in der erweiterten Umgebung
 def train_q_learning(env, episodes=1000):
@@ -53,9 +60,10 @@ def train_q_learning(env, episodes=1000):
         while not done:
             if np.random.rand() < epsilon:  
                 action = env.action_space.sample()
-            else:  # Exploitation
+            else:  
                 x, y = state
                 action = np.argmax(q_table[x, y])
+                next_max = np.max(q_table[nx, ny])
 
             next_state, reward, done, _ = env.step(action)
             x, y = state
@@ -73,7 +81,6 @@ def train_q_learning(env, episodes=1000):
 
     return q_table
 
-
 # Bewertung des Agenten
 def evaluate_agent(env, q_table=None, episodes=100, use_random=False):
     metrics = {
@@ -90,15 +97,12 @@ def evaluate_agent(env, q_table=None, episodes=100, use_random=False):
     }
     total_negative_rewards = 0
     successful_steps = []
-    time_to_goal = []
 
     for _ in range(episodes):
         state = env.reset()
         done = False
         total_rewards = 0
         steps = 0
-        episode_rewards = []
-        episode_start_time = time.time()  
 
         while not done:
             if use_random or q_table is None:
@@ -109,7 +113,6 @@ def evaluate_agent(env, q_table=None, episodes=100, use_random=False):
 
             next_state, reward, done, _ = env.step(action)
             total_rewards += reward
-            episode_rewards.append(reward)
             steps += 1
 
             if reward == -1:
@@ -118,16 +121,15 @@ def evaluate_agent(env, q_table=None, episodes=100, use_random=False):
             if done and reward > 0:
                 metrics['success_rate'] += 1
                 successful_steps.append(steps)
-                time_to_goal.append(time.time() - episode_start_time)
 
             state = next_state
 
         metrics['average_steps_to_goal'] += steps
         metrics['average_rewards'] += total_rewards
-        metrics['min_rewards'] = min(metrics['min_rewards'], min(episode_rewards, default=0))
-        metrics['max_rewards'] = max(metrics['max_rewards'], max(episode_rewards, default=0))
-        total_negative_rewards += sum(r for r in episode_rewards if r < 0)
-        if min(episode_rewards, default=0) == -10:
+        metrics['min_rewards'] = min(metrics['min_rewards'], total_rewards)
+        metrics['max_rewards'] = max(metrics['max_rewards'], total_rewards)
+        total_negative_rewards += total_rewards if total_rewards < 0 else 0
+        if total_rewards == -10:
             metrics['max_penalty_episodes'] += 1
 
     metrics['average_steps_to_goal'] /= episodes
@@ -136,79 +138,46 @@ def evaluate_agent(env, q_table=None, episodes=100, use_random=False):
     metrics['success_rate'] /= episodes
     if successful_steps:
         metrics['avg_successful_steps'] = sum(successful_steps) / len(successful_steps)
-    if time_to_goal:
-        metrics['average_time_to_goal'] = sum(time_to_goal) / len(time_to_goal)
 
     return metrics
 
-# Visualisierung der Agentenbewegung in der erweiterten Umgebung
-def visualize_agent_path(env, q_table, use_random, episode, show=False):
-    state = env.reset()
-    done = False
-    path = [state]
-
-    # Starte Visualisierung
-    fig, ax = plt.subplots(figsize=(5, 5))
-    ax.set_xticks(np.arange(0, 6, 1))
-    ax.set_yticks(np.arange(0, 6, 1))
-    ax.set_xticklabels([])
-    ax.set_yticklabels([])
-    ax.grid(True)
-
-    # Zeichne den Start- und den Zielpunkt sowie Hindernisse
-    ax.plot(0, 0, 'go', markersize=10, label='Start')  
-    ax.plot(env.goal[1], env.goal[0], 'ro', markersize=10, label='Goal') 
-    for obs in env.obstacles:
-        ax.plot(obs[1], obs[0], 'xk', markersize=10, label='Obstacle' if 'Obstacle' not in ax.get_legend_handles_labels()[1] else "")
-
-    # Zeichnet den Pfad des AF
-    for _ in range(25):  
-        if use_random:
-            action = env.action_space.sample()
-        else:
-            x, y = state
-            action = np.argmax(q_table[x, y])
-        state, _, done, _ = env.step(action)
-        path.append(state)
-        if done:
-            break
-
-    xs, ys = zip(*path)
-    ax.plot(ys, xs, 'o-', label='Path', markersize=5, linewidth=2)
-
-    # Zeichne ein "Auto" als Punkt am Ende des Pfades
-    ax.plot(ys[-1], xs[-1], 'bs', markersize=10, label='Car')
-
-    # Legende
-    ax.legend()
-
-    # Zeigt die Visualisierung
-    if show:
-        plt.title('Agent Path with' + ('out ' if use_random else ' ') + 'Decision Algorithm')
-        plt.show()
-    else:
-        plt.close(fig)
-    return fig, ax
-
-
 # Hauptausführung
-env = SimpleDrivingEnv()
-q_table = train_q_learning(env)
+if __name__ == "__main__":
+    env = SimpleDrivingEnv()
+    q_table = train_q_learning(env)
 
-# Bewertung des Agenten ohne Entscheidungsalgorithmen
-metrics_without_algo = evaluate_agent(env, use_random=True)
-print("Leistung ohne Entscheidungsalgorithmen:", metrics_without_algo)
+    # Anzahl der Durchläufe
+    num_runs = 30
 
-# Bewertung des Agenten mit Entscheidungsalgorithmen
-metrics_with_algo = evaluate_agent(env, q_table)
-print("Leistung mit Entscheidungsalgorithmen:", metrics_with_algo)
+    # Liste der Metriken
+    metric_names = ['average_steps_to_goal', 'average_rewards', 'collision_count', 'success_rate', 
+                    'min_rewards', 'max_rewards', 'avg_negative_rewards', 'avg_successful_steps', 
+                    'max_penalty_episodes', 'average_time_to_goal']
 
-# Visualisierung ohne Entscheidungsalgorithmen
-print("Visualisierung ohne Entscheidungsalgorithmen:")
-fig, ax = visualize_agent_path(env, q_table, use_random=True, episode=0, show=True)
+    # Öffne die CSV-Datei im Schreibmodus
+    with open('evaluation_results.csv', 'w', newline='') as csvfile:
+        # Erstelle einen CSV-Writer
+        writer = csv.writer(csvfile)
 
-# Visualisierung mit Entscheidungsalgorithmen
-print("Visualisierung mit Entscheidungsalgorithmen:")
-fig, ax = visualize_agent_path(env, q_table, use_random=False, episode=0, show=True)
+        # Schreibe die Headerzeile
+        writer.writerow(['Run'] + metric_names)
 
-env.close()
+        # Schleife für mehrere Durchläufe
+        for i in range(num_runs):
+            env = SimpleDrivingEnv()
+            q_table = train_q_learning(env)
+            print(f"Durchlauf {i+1}/{num_runs}")
+
+            # Bewertet Agenten ohne Entscheidungsalgorithmen
+            metrics_without_algo = evaluate_agent(env, use_random=True)
+            print("Leistung ohne Entscheidungsalgorithmen:", metrics_without_algo)
+
+            # Bewertet Agenten mit Entscheidungsalgorithmen
+            metrics_with_algo = evaluate_agent(env, q_table)
+            print("Leistung mit Entscheidungsalgorithmen:", metrics_with_algo)
+
+            # Schreibt die Ergebnisse in die CSV-Datei
+            writer.writerow([i+1] + [metrics_without_algo[metric] for metric in metric_names])
+            writer.writerow([i+1] + [metrics_with_algo[metric] for metric in metric_names])
+
+    env.close()
