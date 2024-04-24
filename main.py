@@ -82,7 +82,7 @@ def train_q_learning(env, episodes=1000):
 
             state = next_state
 
-        epsilon *= 0.99  # Reduktion des Epsilon-Werts
+        epsilon *= 0.99  
 
     return q_table
 
@@ -165,8 +165,6 @@ if __name__ == "__main__":
     with open('csv/evaluation_results.csv', 'w', newline='') as csvfile:
         # Erstelle einen CSV-Writer
         writer = csv.writer(csvfile)
-
-        # Schreibe die Headerzeile
         writer.writerow(['Run'] + metric_names)
 
         # Schleife für mehrere Durchläufe
