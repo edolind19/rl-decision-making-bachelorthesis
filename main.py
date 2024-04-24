@@ -2,32 +2,31 @@ import gym
 import numpy as np
 import matplotlib.pyplot as plt
 import csv
-import pandas as pd
 
 class SimpleDrivingEnv(gym.Env):
     def __init__(self):
         super(SimpleDrivingEnv, self).__init__()
         # Anpassung der Aktionen und Zustände
-        self.action_space = gym.spaces.Discrete(5)  # 0=halten, 1=vorwärts, 2=rückwärts, 3=rechts, 4=links
-        self.observation_space = gym.spaces.Box(low=np.array([0, 0, -1, -1]), high=np.array([5, 5, 1, 1]), dtype=np.int32)  # Position und Geschwindigkeit in x, y
+        self.action_space = gym.spaces.Discrete(5)  
+        self.observation_space = gym.spaces.Box(low=np.array([0, 0, -1, -1]), high=np.array([5, 5, 1, 1]), dtype=np.int32)  
         self.state = None
         self.goal = (4, 4)  
         self.obstacles = [(2, 2), (1, 3)]  
 
     def reset(self):
-        self.state = [0, 0, 0, 0]  # x, y, vx, vy
+        self.state = [0, 0, 0, 0]  
         return np.array(self.state)
 
     def step(self, action):
         x, y, vx, vy = self.state
         if action == 1:
-            vx = min(vx + 1, 1)  # Erhöhen der Geschwindigkeit nach vorne
+            vx = min(vx + 1, 1)  
         elif action == 2:
-            vx = max(vx - 1, -1)  # Erhöhen der Geschwindigkeit nach hinten
+            vx = max(vx - 1, -1)  
         elif action == 3:
-            vy = min(vy + 1, 1)  # Nach rechts bewegen
+            vy = min(vy + 1, 1) 
         elif action == 4:
-            vy = max(vy - 1, -1)  # Nach links bewegen
+            vy = max(vy - 1, -1)  
         
         # Update Position based on velocity
         x += vx
@@ -43,7 +42,7 @@ class SimpleDrivingEnv(gym.Env):
         
         return np.array(self.state), reward, done or collision, {}
 
-    def render(self, mode='human'):
+    def render(self):
         grid = np.zeros((6, 6), dtype=int)
         grid[self.goal] = 2  
         for obs in self.obstacles:
@@ -52,13 +51,6 @@ class SimpleDrivingEnv(gym.Env):
         plt.imshow(grid, cmap='viridis', interpolation='nearest')
         plt.title("Simple Driving Environment")
         plt.show()
-    
-    def get_sensor_value(self):
-        # Rückgabe des Gierwinkels (Yaw) als Orientierungsmaß
-        if self.current_step < len(self.sensor_data):
-            return self.sensor_data.iloc[self.current_step]['yaw']
-        else:
-            return 0  # Standardwert, falls alle Datenpunkte gelesen wurden
 
 
 # Training des Agenten mit Q-Learning in der erweiterten Umgebung
@@ -156,8 +148,6 @@ def evaluate_agent(env, q_table=None, episodes=100, use_random=False):
 
     return metrics
 
-sensor_data = pd.read_csv('Orientation.csv')
-
 # Hauptausführung
 if __name__ == "__main__":
     env = SimpleDrivingEnv()
@@ -172,7 +162,7 @@ if __name__ == "__main__":
                     'max_penalty_episodes', 'average_time_to_goal']
 
     # Öffne die CSV-Datei im Schreibmodus
-    with open('evaluation_results.csv', 'w', newline='') as csvfile:
+    with open('csv/evaluation_results.csv', 'w', newline='') as csvfile:
         # Erstelle einen CSV-Writer
         writer = csv.writer(csvfile)
 
