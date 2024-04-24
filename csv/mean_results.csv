@@ -1,0 +1,21 @@
+Mittelwerte mit Algorithmus:
+Run                      15.500000
+average_steps_to_goal     5.600000
+average_rewards          94.686667
+collision_count           0.000000
+success_rate              1.000000
+min_rewards              94.686667
+max_rewards              94.686667
+avg_negative_rewards      0.000000
+avg_successful_steps      5.600000
+
+Mittelwerte ohne Algorithmus:
+Run                       15.500000
+average_steps_to_goal     91.063000
+average_rewards         -141.999533
+collision_count           70.000000
+success_rate               0.300000
+min_rewards             -627.843333
+max_rewards               93.650000
+avg_negative_rewards    -152.313367
+avg_successful_steps      94.343871

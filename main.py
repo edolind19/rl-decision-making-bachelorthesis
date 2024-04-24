@@ -1,7 +1,7 @@
 import gym
 import numpy as np
-import matplotlib.pyplot as plt
 import csv
+import time
 
 class SimpleDrivingEnv(gym.Env):
     def __init__(self):
@@ -46,7 +46,7 @@ class SimpleDrivingEnv(gym.Env):
 # Training des Agenten mit Q-Learning in der erweiterten Umgebung
 def train_q_learning(env, episodes=1000):
     # Anpassung der Q-Tabelle an den erweiterten Zustandsraum und Aktionsraum
-    q_table = np.zeros((6, 6, 3, 3, env.action_space.n))  # Hinzufügung der Geschwindigkeitsdimensionen
+    q_table = np.zeros((6, 6, 3, 3, env.action_space.n)) 
     alpha = 0.1
     gamma = 0.99
     epsilon = 1.0
@@ -88,15 +88,15 @@ def evaluate_agent(env, q_table=None, episodes=100, use_random=False):
         'max_rewards': float('-inf'),
         'avg_negative_rewards': 0,
         'avg_successful_steps': 0,
-        'max_penalty_episodes': 0,
-        'average_time_to_goal': 0
     }
     total_negative_rewards = 0
     successful_steps = []
 
+
     for _ in range(episodes):
         state = env.reset()
         done = False
+        start_time = time.time()  
         total_rewards = 0
         steps = 0
 
@@ -148,8 +148,7 @@ if __name__ == "__main__":
 
     # Liste der Metriken
     metric_names = ['average_steps_to_goal', 'average_rewards', 'collision_count', 'success_rate', 
-                    'min_rewards', 'max_rewards', 'avg_negative_rewards', 'avg_successful_steps', 
-                    'max_penalty_episodes', 'average_time_to_goal']
+                    'min_rewards', 'max_rewards', 'avg_negative_rewards', 'avg_successful_steps']
 
     # Öffne die CSV-Datei im Schreibmodus
     with open('csv/evaluation_results.csv', 'w', newline='') as csvfile:
