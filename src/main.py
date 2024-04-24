@@ -3,83 +3,94 @@ import numpy as np
 import matplotlib.pyplot as plt
 import csv
 import pandas as pd
+import math
 
 class SimpleDrivingEnv(gym.Env):
-    def __init__(self):
+    def __init__(self, sensor_data):
         super(SimpleDrivingEnv, self).__init__()
-        self.action_space = gym.spaces.Discrete(4)  
-        self.observation_space = gym.spaces.Box(low=0, high=5, shape=(2,), dtype=int)
+        self.action_space = gym.spaces.Box(low=np.array([-1, -1]), high=np.array([1, 1]), dtype=np.float32)  
+        self.observation_space = gym.spaces.Box(low=np.array([0, 0, -np.pi, -3, -3]), high=np.array([5, 5, np.pi, 3, 3]), dtype=np.float32)
         self.state = None
-        self.goal = (4, 4)  
-        self.obstacles = [(2, 2), (1, 3)]  
+        self.goal = (4, 4)
+        self.obstacles = [(2, 2), (1, 3)]
+        self.sensor_data = sensor_data
+        self.current_step = 0
 
     def reset(self):
-        self.state = (0, 0)  
-        return self.state
+        self.state = [0, 0, 0, 0, 0]  
+        self.current_step = 0
+        return np.array(self.state)
 
     def step(self, action):
-        x, y = self.state
-        if action == 0: x = max(x - 1, 0)
-        elif action == 1: x = min(x + 1, 5)
-        elif action == 2: y = max(y - 1, 0)
-        elif action == 3: y = min(y + 1, 5)
+        x, y, theta, vx, vy = self.state
+        acc, steering = action
+        theta += steering * 0.05 
+        theta = (theta + np.pi) % (2 * np.pi) - np.pi  
+        vx += acc * math.cos(theta)  
+        vy += acc * math.sin(theta)  
+        x += vx
+        y += vy
+        x = np.clip(x, 0, 5)
+        y = np.clip(y, 0, 5)
+
+        self.state = [x, y, theta, vx, vy]
+        self.current_step += 1
         
-        self.state = (x, y)
-        
-        done = self.state == self.goal
-        collision = self.state in self.obstacles
-        reward = 10 if done else -10 if collision else -1
-        
-        sensor_value = self.get_sensor_value()  # Hier wird der Sensorwert abgerufen
-        return self.state, reward, done or collision, sensor_value
+        done = np.linalg.norm([x - self.goal[0], y - self.goal[1]]) < 0.5
+        collision = any(np.linalg.norm([x - ox, y - oy]) < 0.5 for ox, oy in self.obstacles)
+        reward = 100 if done else -100 if collision else -1 - 0.1 * (vx**2 + vy**2)
+
+        return np.array(self.state), reward, done or collision, {}
 
     def render(self, mode='human'):
         grid = np.zeros((6, 6), dtype=int)
-        grid[self.goal] = 2  
+        grid[self.goal] = 2
         for obs in self.obstacles:
-            grid[obs] = -1 
-        grid[self.state] = 1
+            grid[obs] = -1
+        grid[int(self.state[0]), int(self.state[1])] = 1
         plt.imshow(grid, cmap='viridis', interpolation='nearest')
         plt.title("Simple Driving Environment")
         plt.show()
     
     def get_sensor_value(self):
-        # Dummy-Sensorwert, der eine zufällige Zahl zwischen 0 und 100 zurückgibt
-        return np.random.randint(0, 101)
+        # Rückgabe des Gierwinkels (Yaw) als Orientierungsmaß
+        if self.current_step < len(self.sensor_data):
+            return self.sensor_data.iloc[self.current_step]['yaw']
+        else:
+            return 0  
 
 # Training des Agenten mit Q-Learning in der erweiterten Umgebung
 def train_q_learning(env, episodes=1000):
-    q_table = np.zeros((6, 6, env.action_space.n))
-    alpha = 0.1  
-    gamma = 0.99  
-    epsilon = 1.0  
+    q_table = np.zeros((6, 6, 3, 3, env.action_space.n)) 
+    alpha = 0.1
+    gamma = 0.99
+    epsilon = 1.0
 
     for _ in range(episodes):
         state = env.reset()
         done = False
         while not done:
-            if np.random.rand() < epsilon:  
+            x, y, vx, vy = state
+            if np.random.rand() < epsilon:
                 action = env.action_space.sample()
-            else:  
-                x, y = state
-                action = np.argmax(q_table[x, y])
-                next_max = np.max(q_table[nx, ny])
+            else:
+                action = np.argmax(q_table[x, y, vx + 1, vy + 1])
 
             next_state, reward, done, _ = env.step(action)
-            x, y = state
-            nx, ny = next_state
+            nx, ny, nvx, nvy = next_state
 
-            old_value = q_table[x, y, action]
-            next_max = np.max(q_table[nx, ny])
+            old_value = q_table[x, y, vx + 1, vy + 1, action]
+            next_max = np.max(q_table[nx, ny, nvx + 1, nvy + 1])
 
             # Update der Q-Tabelle
-            q_table[x, y, action] = old_value + alpha * (reward + gamma * next_max - old_value)
+            q_table[x, y, vx + 1, vy + 1, action] = old_value + alpha * (reward + gamma * next_max - old_value)
 
             state = next_state
 
         epsilon *= 0.99  
 
     return q_table
+
 
 # Bewertung des Agenten
 def evaluate_agent(env, q_table=None, episodes=100, use_random=False):
@@ -105,20 +116,20 @@ def evaluate_agent(env, q_table=None, episodes=100, use_random=False):
         steps = 0
 
         while not done:
+            x, y, vx, vy = state
             if use_random or q_table is None:
                 action = env.action_space.sample()
             else:
-                x, y = state
-                action = np.argmax(q_table[x, y])
+                action = np.argmax(q_table[x, y, vx + 1, vy + 1])
 
             next_state, reward, done, _ = env.step(action)
             total_rewards += reward
             steps += 1
 
-            if reward == -1:
+            if reward == -100:
                 metrics['collision_count'] += 1
             
-            if done and reward > 0:
+            if done and reward == 100:
                 metrics['success_rate'] += 1
                 successful_steps.append(steps)
 
@@ -128,8 +139,9 @@ def evaluate_agent(env, q_table=None, episodes=100, use_random=False):
         metrics['average_rewards'] += total_rewards
         metrics['min_rewards'] = min(metrics['min_rewards'], total_rewards)
         metrics['max_rewards'] = max(metrics['max_rewards'], total_rewards)
-        total_negative_rewards += total_rewards if total_rewards < 0 else 0
-        if total_rewards == -10:
+        if total_rewards < 0:
+            total_negative_rewards += total_rewards
+        if total_rewards == -100:
             metrics['max_penalty_episodes'] += 1
 
     metrics['average_steps_to_goal'] /= episodes
@@ -143,7 +155,8 @@ def evaluate_agent(env, q_table=None, episodes=100, use_random=False):
 
 # Hauptausführung
 if __name__ == "__main__":
-    env = SimpleDrivingEnv()
+    sensor_data = pd.read_csv('Orientation.csv')
+    env = SimpleDrivingEnv(sensor_data)
     q_table = train_q_learning(env)
 
     # Anzahl der Durchläufe
