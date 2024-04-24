@@ -42,16 +42,6 @@ class SimpleDrivingEnv(gym.Env):
         
         return np.array(self.state), reward, done or collision, {}
 
-    def render(self):
-        grid = np.zeros((6, 6), dtype=int)
-        grid[self.goal] = 2  
-        for obs in self.obstacles:
-            grid[obs] = -1 
-        grid[self.state[:2]] = 1
-        plt.imshow(grid, cmap='viridis', interpolation='nearest')
-        plt.title("Simple Driving Environment")
-        plt.show()
-
 
 # Training des Agenten mit Q-Learning in der erweiterten Umgebung
 def train_q_learning(env, episodes=1000):
