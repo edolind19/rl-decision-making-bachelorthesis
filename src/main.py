@@ -3,51 +3,52 @@ import numpy as np
 import matplotlib.pyplot as plt
 import csv
 import pandas as pd
-import math
 
 class SimpleDrivingEnv(gym.Env):
-    def __init__(self, sensor_data):
+    def __init__(self):
         super(SimpleDrivingEnv, self).__init__()
-        self.action_space = gym.spaces.Box(low=np.array([-1, -1]), high=np.array([1, 1]), dtype=np.float32)  
-        self.observation_space = gym.spaces.Box(low=np.array([0, 0, -np.pi, -3, -3]), high=np.array([5, 5, np.pi, 3, 3]), dtype=np.float32)
+        # Anpassung der Aktionen und Zustände
+        self.action_space = gym.spaces.Discrete(5)  # 0=halten, 1=vorwärts, 2=rückwärts, 3=rechts, 4=links
+        self.observation_space = gym.spaces.Box(low=np.array([0, 0, -1, -1]), high=np.array([5, 5, 1, 1]), dtype=np.int32)  # Position und Geschwindigkeit in x, y
         self.state = None
-        self.goal = (4, 4)
-        self.obstacles = [(2, 2), (1, 3)]
-        self.sensor_data = sensor_data
-        self.current_step = 0
+        self.goal = (4, 4)  
+        self.obstacles = [(2, 2), (1, 3)]  
 
     def reset(self):
-        self.state = [0, 0, 0, 0, 0]  
-        self.current_step = 0
+        self.state = [0, 0, 0, 0]  # x, y, vx, vy
         return np.array(self.state)
 
     def step(self, action):
-        x, y, theta, vx, vy = self.state
-        acc, steering = action
-        theta += steering * 0.05 
-        theta = (theta + np.pi) % (2 * np.pi) - np.pi  
-        vx += acc * math.cos(theta)  
-        vy += acc * math.sin(theta)  
+        x, y, vx, vy = self.state
+        if action == 1:
+            vx = min(vx + 1, 1)  # Erhöhen der Geschwindigkeit nach vorne
+        elif action == 2:
+            vx = max(vx - 1, -1)  # Erhöhen der Geschwindigkeit nach hinten
+        elif action == 3:
+            vy = min(vy + 1, 1)  # Nach rechts bewegen
+        elif action == 4:
+            vy = max(vy - 1, -1)  # Nach links bewegen
+        
+        # Update Position based on velocity
         x += vx
         y += vy
         x = np.clip(x, 0, 5)
         y = np.clip(y, 0, 5)
 
-        self.state = [x, y, theta, vx, vy]
-        self.current_step += 1
+        self.state = [x, y, vx, vy]
         
-        done = np.linalg.norm([x - self.goal[0], y - self.goal[1]]) < 0.5
-        collision = any(np.linalg.norm([x - ox, y - oy]) < 0.5 for ox, oy in self.obstacles)
-        reward = 100 if done else -100 if collision else -1 - 0.1 * (vx**2 + vy**2)
-
+        done = (x, y) == self.goal
+        collision = (x, y) in self.obstacles
+        reward = 100 if done else -100 if collision else -1 - 0.1 * (vx**2 + vy**2)  # Energiekosten berücksichtigen
+        
         return np.array(self.state), reward, done or collision, {}
 
     def render(self, mode='human'):
         grid = np.zeros((6, 6), dtype=int)
-        grid[self.goal] = 2
+        grid[self.goal] = 2  
         for obs in self.obstacles:
-            grid[obs] = -1
-        grid[int(self.state[0]), int(self.state[1])] = 1
+            grid[obs] = -1 
+        grid[self.state[:2]] = 1
         plt.imshow(grid, cmap='viridis', interpolation='nearest')
         plt.title("Simple Driving Environment")
         plt.show()
@@ -57,11 +58,13 @@ class SimpleDrivingEnv(gym.Env):
         if self.current_step < len(self.sensor_data):
             return self.sensor_data.iloc[self.current_step]['yaw']
         else:
-            return 0  
+            return 0  # Standardwert, falls alle Datenpunkte gelesen wurden
+
 
 # Training des Agenten mit Q-Learning in der erweiterten Umgebung
 def train_q_learning(env, episodes=1000):
-    q_table = np.zeros((6, 6, 3, 3, env.action_space.n)) 
+    # Anpassung der Q-Tabelle an den erweiterten Zustandsraum und Aktionsraum
+    q_table = np.zeros((6, 6, 3, 3, env.action_space.n))  # Hinzufügung der Geschwindigkeitsdimensionen
     alpha = 0.1
     gamma = 0.99
     epsilon = 1.0
@@ -87,7 +90,7 @@ def train_q_learning(env, episodes=1000):
 
             state = next_state
 
-        epsilon *= 0.99  
+        epsilon *= 0.99  # Reduktion des Epsilon-Werts
 
     return q_table
 
@@ -153,10 +156,11 @@ def evaluate_agent(env, q_table=None, episodes=100, use_random=False):
 
     return metrics
 
+sensor_data = pd.read_csv('Orientation.csv')
+
 # Hauptausführung
 if __name__ == "__main__":
-    sensor_data = pd.read_csv('Orientation.csv')
-    env = SimpleDrivingEnv(sensor_data)
+    env = SimpleDrivingEnv()
     q_table = train_q_learning(env)
 
     # Anzahl der Durchläufe
