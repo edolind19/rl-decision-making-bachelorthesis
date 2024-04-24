@@ -28,7 +28,7 @@ class SimpleDrivingEnv(gym.Env):
         elif action == 4:
             vy = max(vy - 1, -1)  
         
-        # Update Position based on velocity
+        # Aktualisierung der Position
         x += vx
         y += vy
         x = np.clip(x, 0, 5)
@@ -38,7 +38,7 @@ class SimpleDrivingEnv(gym.Env):
         
         done = (x, y) == self.goal
         collision = (x, y) in self.obstacles
-        reward = 100 if done else -100 if collision else -1 - 0.1 * (vx**2 + vy**2)  # Energiekosten berücksichtigen
+        reward = 100 if done else -100 if collision else -1 - 0.1 * (vx**2 + vy**2)  
         
         return np.array(self.state), reward, done or collision, {}
 
